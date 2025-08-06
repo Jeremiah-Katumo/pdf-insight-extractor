@@ -1,92 +1,68 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-import time
+import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
+from scraper import scrape_data
+import os
 
-# Setup
-url = "https://ca.soccerway.com/national/france/ligue-1/20242025/regular-season/r81802/matches/"
-chrome_options = webdriver.ChromeOptions()
-# chrome_options.add_experimental_option("detach", True)
+st.set_page_config(page_title="Ligue 1 Match Analyzer", layout="wide")
+st.title("⚽ Ligue 1 Match Analyzer (2024/25)")
 
-driver = webdriver.Chrome(options=chrome_options)
-driver.get(url)
+# Scrape Button
+st.sidebar.header("🔄 Live Scraper")
+# chromedriver_path = st.sidebar.text_input("Enter path to chromedriver", value="/usr/bin/chromedriver")
+if st.sidebar.button("Scrape Live Data"):
+    with st.spinner("Scraping Soccerway... please wait (~1-2 mins)"):
+        df_zero, df_late = scrape_data()
+        st.success("✅ Live data updated!")
 
-# Click “Load previous” until all weeks load
-for _ in range(40):  # up to 38 weeks
-    try:
-        load_button = driver.find_element(By.CLASS_NAME, 'btn-more')
-        load_button.click()
-        time.sleep(2)
-    except:
-        break
+# Load data
+try:
+    df_zero = pd.read_csv("data/zero_zero_matches.csv")
+    df_late = pd.read_csv("data/late_goal_matches.csv")
+    df_late['Date'] = pd.to_datetime(df_late['Date'], errors='coerce')
+except Exception as e:
+    st.error("Error loading CSV files. Please scrape first.")
+    st.stop()
 
-# Extract match links and final scores
-matches = driver.find_elements(By.CSS_SELECTOR, 'tr.match')
+# Section 1 – 0-0 Matches
+st.subheader("🥱 0-0 Matches")
+st.metric(label="Total 0-0 Matches", value=int(df_zero.iloc[0, 0]))
 
-zero_zero_count = 0
-late_goal_matches = []
+# Section 2 – Late Goals
+st.subheader("⏱ Matches with 1–3 Goals & First Goal ≥ 70'")
+team_filter = st.text_input("Filter by Team Name").lower().strip()
+min_goal_time = st.slider("Minimum First Goal Time", 70, 90, 70)
 
-for match in matches:
-    try:
-        score = match.find_element(By.CLASS_NAME, 'score-time').text.strip()
-        teams = match.find_elements(By.CLASS_NAME, 'team-name')
-        if len(teams) != 2:
-            continue
-        home = teams[0].text.strip()
-        away = teams[1].text.strip()
+filtered = df_late[
+    (df_late["First Goal Minute"] >= min_goal_time) &
+    (
+        df_late["Home Team"].str.lower().str.contains(team_filter) |
+        df_late["Away Team"].str.lower().str.contains(team_filter)
+    )
+]
 
-        if score in ['0 - 0', '0-0']:
-            zero_zero_count += 1
-            continue
+st.dataframe(filtered.sort_values(by="Date", ascending=False), use_container_width=True)
 
-        # Parse only low-goal games
-        allowed_scores = ['0 - 1', '1 - 0', '1 - 1', '0 - 2', '2 - 0', '1 - 2', '2 - 1']
-        if score not in allowed_scores:
-            continue
+# Charts
+st.subheader("📊 Goal Minute Distribution")
+fig, ax = plt.subplots()
+df_late["Minute Bucket"] = pd.cut(df_late["First Goal Minute"], bins=[70,75,80,85,90], labels=["70-74","75-79","80-84","85-90"])
+df_late["Minute Bucket"].value_counts().sort_index().plot(kind='bar', ax=ax, color="skyblue")
+ax.set_ylabel("Match Count")
+ax.set_xlabel("First Goal Time Bucket")
+st.pyplot(fig)
 
-        # Click match to view goal times
-        link = match.find_element(By.TAG_NAME, 'a').get_attribute('href')
-        driver.execute_script("window.open(arguments[0]);", link)
-        driver.switch_to.window(driver.window_handles[1])
-        time.sleep(3)
+st.subheader("📈 Late Goal Matches Over Time")
+line_fig, ax2 = plt.subplots()
+df_late["Date"].value_counts().sort_index().plot(ax=ax2, marker='o', color="orange")
+ax2.set_ylabel("Number of Matches")
+ax2.set_xlabel("Date")
+st.pyplot(line_fig)
 
-        # Find goal times
-        goal_events = driver.find_elements(By.CSS_SELECTOR, '.event .minute')
-        if not goal_events:
-            driver.close()
-            driver.switch_to.window(driver.window_handles[0])
-            continue
+# Downloads
+st.download_button("📥 Download 0-0 Count", df_zero.to_csv(index=False), "zero_zero_matches.csv", "text/csv")
+st.download_button("📥 Download Late Goals Data", df_late.to_csv(index=False), "late_goal_matches.csv", "text/csv")
 
-        minutes = []
-        for event in goal_events:
-            minute_text = event.text.replace("'", "").replace("+", "")
-            try:
-                minutes.append(int(minute_text))
-            except:
-                continue
-
-        if minutes and min(minutes) >= 70:
-            late_goal_matches.append({
-                "Home": home,
-                "Away": away,
-                "Score": score,
-                "First Goal Minute": min(minutes),
-                "Link": link
-            })
-
-        driver.close()
-        driver.switch_to.window(driver.window_handles[0])
-
-    except Exception as e:
-        continue
-
-driver.quit()
-
-# Create DataFrames
-df_zero = pd.DataFrame([{"0-0 Count": zero_zero_count}])
-df_late = pd.DataFrame(late_goal_matches)
-
-# Save to Excel/Google Sheets
-df_zero.to_csv("zero_zero_matches.csv", index=False)
-df_late.to_csv("late_goal_matches.csv", index=False)
+# Footer
+st.markdown("---")
+st.markdown("📊 Built with ❤️ by [Your Name]")
