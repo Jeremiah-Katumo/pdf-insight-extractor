@@ -82,6 +82,15 @@ def get_goal_minutes(goal_events_div_xpath):  # arg: goal_events_div_xpath
         return []
     
     
+def parse_minute(minute_str):
+    # Handle "90+3'" -> 93, "45'" -> 45
+    minute_str = minute_str.replace("'", "").strip()
+    if "+" in minute_str:
+        base, extra = minute_str.split("+")
+        return int(base) + int(extra)
+    return int(minute_str)
+    
+    
 def scrape_data():
     for _ in range(38): # 38 weeks(match days) in Ligue 1
         try:
@@ -130,11 +139,15 @@ def scrape_data():
     # print(f"Total matches found for 2025 in france/ligue-1: {len(match_hrefs)}")
     # for href in sorted(match_hrefs):
     #     print(href)
-
+    
+    
+def extract_match_data(driver, match_hrefs):
     zero_zero_count = 0
     late_goals_count = 0
     valid_scores = {'0 - 1', '1 - 0', '1 - 1', '0 - 2', '2 - 0', '1 - 2', '2 - 1'}
     late_goal_teams = []
+    late_goal_matches = []
+    goal_count = 0
 
     for href in match_hrefs:
         driver.get(href)
@@ -161,84 +174,179 @@ def scrape_data():
 
             if score == "0 - 0":
                 zero_zero_count += 1
+                print(zero_zero_count)
                 continue
-
+            
             if score in valid_scores and 1 <= total_goals <= 3:
-                home_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[1]")
-                away_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[2]")
+                # home_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[1]")
+                # away_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[2]")
+                xpaths = [
+                    "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[2]/div[2]/span/span",
+                    "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[3]/div[2]/span/span",
+                    "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[4]/div[2]/span/span",
+                    "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[5]/div[2]/span/span",
+                    "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[6]/div[2]/span/span"
+                ]
 
-                all_goals = sorted(home_goals_minutes + away_goals_minutes)
+                # === Extract and print scored minutes ===
+                minutes_list = []
+                for xpath in xpaths:
+                    try:
+                        scored_minute = driver.find_element(By.XPATH, xpath)
+                        scored_minute_text = scored_minute.text.strip()
+                        # print([scored_minute_text])
+                        if not scored_minute_text:
+                            break  # Stop if no more scored minutes
+                        minutes_list.append(scored_minute_text)
+                        print(minutes_list)
+                    except Exception as e:
+                        print(f"Could not find element at {xpath} - {e}")
+                        
+                parsed_minutes = [parse_minute(minute) for minute in minutes_list]  # e.g., [20, 43, 53]
+                # print(parsed_minutes)  # e.g., [20, 43, 53]
+                
+                for minute in parsed_minutes:
+                    if minute <= 70:
+                        goal_count += 1
+                    
+                        # Check if goal_count is valid and all goals are after 70th minute
+                    if goal_count and 1 <= minute <= 90:
+                        late_goals_count += 1
+                        late_goal_teams.append(f"{home_team_elem.text.strip()} {int(home_score_elem.text.strip())} vs {int(away_score_elem.text.strip())} {away_team_elem.text.strip()}")
 
-                if all_goals and all(minute >= 70 for minute in all_goals):
-                    late_goals_count += 1
-                    late_goal_teams.append(f"{home_team_elem.text.strip()} vs {away_team_elem.text.strip()}")
+                # all_goals = sorted(home_goals_minutes + away_goals_minutes)
+
+                # if all_goals and all(minute >= 70 for minute in all_goals):
+                #     late_goals_count += 1
+                #     late_goal_teams.append(f"{home_team_elem.text.strip()} vs {away_team_elem.text.strip()}")
+                
+                late_goal_matches.append({
+                    "zero_zero_count": zero_zero_count,
+                    "late_goals_count": late_goals_count,
+                    "late_goal_teams": late_goal_teams,
+                    "goal_count": goal_count
+                })
+                
+                df_zero = pd.DataFrame([{"0-0 Count": zero_zero_count}])
+                df_late = pd.DataFrame(late_goal_matches)
+
+                df_zero.to_csv("data/zero_zero_matches.csv", index=False)
+                df_late.to_csv("data/late_goal_matches.csv", index=False)
 
         except Exception as e:
             print(f"Error processing {href}: {e}")
             continue
+        
+    return df_zero, df_late
 
-        print(f"\n✅ Total 0-0 games: {zero_zero_count}")
-        print(f"✅ Total 1-3 goal games with first goal after 70th minute: {late_goals_count}")
-        print("✅ Matches where all goals were after 70th minute:")
-        for match in late_goal_teams:
-            print(f" - {match}")
+    # zero_zero_count = 0
+    # late_goals_count = 0
+    # valid_scores = {'0 - 1', '1 - 0', '1 - 1', '0 - 2', '2 - 0', '1 - 2', '2 - 1'}
+    # late_goal_teams = []
+
+    # for href in match_hrefs:
+    #     driver.get(href)
+    #     time.sleep(2)
+        
+    #     try:
+    #         # Handle consent popup
+    #         consent_button = driver.find_element(By.XPATH, "/html/body/div[8]/div[2]/div[2]/div[2]/button")
+    #         consent_button.click()
+    #         time.sleep(1)
+    #     except:
+    #         pass  # Consent may have already been handled
+
+    #     try:
+    #         home_score_elem = driver.find_element(By.XPATH, "/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[3]/div/div/div/div[1]/div")
+    #         away_score_elem = driver.find_element(By.XPATH, "/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[3]/div/div/div/div[3]/div")
+    #         home_team_elem = driver.find_element(By.XPATH, "/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[3]/div/a[1]/div")
+    #         away_team_elem = driver.find_element(By.XPATH, "/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[3]/div/a[2]/div")
+
+    #         home_score = int(home_score_elem.text.strip())
+    #         away_score = int(away_score_elem.text.strip())
+    #         score = f"{home_score} - {away_score}"
+    #         total_goals = home_score + away_score
+
+    #         if score == "0 - 0":
+    #             zero_zero_count += 1
+    #             continue
+
+    #         if score in valid_scores and 1 <= total_goals <= 3:
+    #             home_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[1]")
+    #             away_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[2]")
+
+    #             all_goals = sorted(home_goals_minutes + away_goals_minutes)
+
+    #             if all_goals and all(minute >= 70 for minute in all_goals):
+    #                 late_goals_count += 1
+    #                 late_goal_teams.append(f"{home_team_elem.text.strip()} vs {away_team_elem.text.strip()}")
+
+    #     except Exception as e:
+    #         print(f"Error processing {href}: {e}")
+    #         continue
+
+    #     print(f"\n✅ Total 0-0 games: {zero_zero_count}")
+    #     print(f"✅ Total 1-3 goal games with first goal after 70th minute: {late_goals_count}")
+    #     print("✅ Matches where all goals were after 70th minute:")
+    #     for match in late_goal_teams:
+    #         print(f" - {match}")
 
 
-        for match in matches:
-            try:
-                score = match.find_element(By.CLASS_NAME, 'score-time').text.strip()
-                teams = match.find_elements(By.CLASS_NAME, 'team-name')
-                if len(teams) != 2:
-                    continue
-                home = teams[0].text.strip()
-                away = teams[1].text.strip()
+    #     for match in matches:
+    #         try:
+    #             score = match.find_element(By.CLASS_NAME, 'score-time').text.strip()
+    #             teams = match.find_elements(By.CLASS_NAME, 'team-name')
+    #             if len(teams) != 2:
+    #                 continue
+    #             home = teams[0].text.strip()
+    #             away = teams[1].text.strip()
 
-                date = match.find_element(By.CLASS_NAME, 'score-time').get_attribute("data-dt").split(" ")[0]
+    #             date = match.find_element(By.CLASS_NAME, 'score-time').get_attribute("data-dt").split(" ")[0]
 
-                if score in ['0 - 0', '0-0']:
-                    zero_zero_count += 1
-                    continue
+    #             if score in ['0 - 0', '0-0']:
+    #                 zero_zero_count += 1
+    #                 continue
 
-                allowed_scores = ['0 - 1', '1 - 0', '1 - 1', '0 - 2', '2 - 0', '1 - 2', '2 - 1']
-                if score not in allowed_scores:
-                    continue
+    #             allowed_scores = ['0 - 1', '1 - 0', '1 - 1', '0 - 2', '2 - 0', '1 - 2', '2 - 1']
+    #             if score not in allowed_scores:
+    #                 continue
 
-                link = match.find_element(By.TAG_NAME, 'a').get_attribute('href')
-                driver.execute_script("window.open(arguments[0]);", link)
-                driver.switch_to.window(driver.window_handles[1])
-                time.sleep(3)
+    #             link = match.find_element(By.TAG_NAME, 'a').get_attribute('href')
+    #             driver.execute_script("window.open(arguments[0]);", link)
+    #             driver.switch_to.window(driver.window_handles[1])
+    #             time.sleep(3)
 
-                goal_events = driver.find_elements(By.CSS_SELECTOR, '.event .minute')
-                minutes = []
-                for event in goal_events:
-                    m = event.text.replace("'", "").replace("+", "")
-                    try:
-                        minutes.append(int(m))
-                    except:
-                        continue
+    #             goal_events = driver.find_elements(By.CSS_SELECTOR, '.event .minute')
+    #             minutes = []
+    #             for event in goal_events:
+    #                 m = event.text.replace("'", "").replace("+", "")
+    #                 try:
+    #                     minutes.append(int(m))
+    #                 except:
+    #                     continue
 
-                if minutes and min(minutes) >= 70:
-                    late_goal_matches.append({
-                        "Date": date,
-                        "Home Team": home,
-                        "Away Team": away,
-                        "Score": score,
-                        "First Goal Minute": min(minutes),
-                        "Match Link": link
-                    })
+    #             if minutes and min(minutes) >= 70:
+    #                 late_goal_matches.append({
+    #                     "Date": date,
+    #                     "Home Team": home,
+    #                     "Away Team": away,
+    #                     "Score": score,
+    #                     "First Goal Minute": min(minutes),
+    #                     "Match Link": link
+    #                 })
 
-                driver.close()
-                driver.switch_to.window(driver.window_handles[0])
+    #             driver.close()
+    #             driver.switch_to.window(driver.window_handles[0])
 
-            except Exception as e:
-                continue
+    #         except Exception as e:
+    #             continue
 
-        driver.quit()
+    #     driver.quit()
 
-        df_zero = pd.DataFrame([{"0-0 Count": zero_zero_count}])
-        df_late = pd.DataFrame(late_goal_matches)
+    #     df_zero = pd.DataFrame([{"0-0 Count": zero_zero_count}])
+    #     df_late = pd.DataFrame(late_goal_matches)
 
-        df_zero.to_csv("data/zero_zero_matches.csv", index=False)
-        df_late.to_csv("data/late_goal_matches.csv", index=False)
+    #     df_zero.to_csv("data/zero_zero_matches.csv", index=False)
+    #     df_late.to_csv("data/late_goal_matches.csv", index=False)
 
-        return df_zero, df_late
+    #     return df_zero, df_late
