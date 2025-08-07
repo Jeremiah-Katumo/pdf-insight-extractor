@@ -4,7 +4,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import (
+    ElementClickInterceptedException,
+    TimeoutException,
+    NoSuchElementException
+)
 import time
 import pandas as pd
 
@@ -139,7 +143,27 @@ def scrape_data():
     # print(f"Total matches found for 2025 in france/ligue-1: {len(match_hrefs)}")
     # for href in sorted(match_hrefs):
     #     print(href)
-    
+
+def load_all_previous_data(driver, timeout=10):
+    """Click the 'Load Previous' button until it disappears or becomes inactive."""
+    while True:
+        try:
+            # Adjust based on real button class or text
+            load_button = WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Load Previous')]"))
+            )
+            driver.execute_script("arguments[0].click();", load_button)
+            print("Clicked Load Previous")
+            time.sleep(2)  # Let content load
+        except (TimeoutException, NoSuchElementException):
+            print("No more Load Previous button found.")
+            break
+        except ElementClickInterceptedException as e:
+            print(f"Click intercepted: {e}")
+            # Optionally scroll into view or dismiss overlays
+            driver.execute_script("arguments[0].scrollIntoView();", load_button)
+            time.sleep(1)
+            
     
 def extract_match_data(driver, match_hrefs):
     zero_zero_count = 0
@@ -178,6 +202,7 @@ def extract_match_data(driver, match_hrefs):
                 continue
             
             if score in valid_scores and 1 <= total_goals <= 3:
+                load_all_previous_data(driver)
                 # home_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[1]")
                 # away_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[2]")
                 xpaths = [
@@ -219,7 +244,6 @@ def extract_match_data(driver, match_hrefs):
                 # if all_goals and all(minute >= 70 for minute in all_goals):
                 #     late_goals_count += 1
                 #     late_goal_teams.append(f"{home_team_elem.text.strip()} vs {away_team_elem.text.strip()}")
-                
                 late_goal_matches.append({
                     "zero_zero_count": zero_zero_count,
                     "late_goals_count": late_goals_count,
