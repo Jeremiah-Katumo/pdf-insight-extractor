@@ -57,7 +57,15 @@ except Exception as e:
 
 # Section 1 – 0-0 Matches
 st.subheader("🥱 0-0 Matches")
-st.metric(label="Total 0-0 Matches", value=int(df_zero.iloc[0, 0]))
+if df_zero.empty:
+    st.warning("No 0-0 matches found.")
+else:
+    st.metric(label="Total Matches", value=len(df_zero))
+    st.metric(label="Total 0-0 Matches", value=int(df_zero["0_0_count"].iloc[0]))
+    st.dataframe(df_zero.sort_values(by="Date", ascending=False), use_container_width=True)
+    st.markdown("### Match Details")
+    st.markdown("This section shows all matches that ended in a 0-0 draw.")
+# st.metric(label="Total 0-0 Matches", value=int(df_zero["zero_zero_count"].iloc[0]))
 
 # Section 2 – Early Goals
 st.subheader("⚡ Matches with 1–3 Goals & First Goal < 70'")
