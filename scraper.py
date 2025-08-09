@@ -30,7 +30,7 @@ def start_driver():
 
     return driver
 
-driver = start_driver(url)
+driver = start_driver()
 
 match_hrefs = set()
 europe_ligues = ['france/ligue-1', 'germany/bundesliga']
@@ -95,54 +95,188 @@ def parse_minute(minute_str):
     return int(minute_str)
     
     
-def scrape_data():
-    for _ in range(38): # 38 weeks(match days) in Ligue 1
+def safe_click(xpath):
+    """Wait and click element, fallback to JS click if normal click fails."""
+    try:
+        btn = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, xpath))
+        )
         try:
-            # Load previous button
-            btn = driver.find_element(By.XPATH, f"/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div/div[2]/div[1]/div/div/div/button")
             btn.click()
-            time.sleep(2)
         except:
-            break
+            driver.execute_script("arguments[0].click();", btn)
+        time.sleep(2)  # allow content to load
+        return True
+    except Exception:
+        return False
 
-    # single match div
-    match = driver.find_element(By.XPATH, f"/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div/div[2]/div[2]/div/div/div[3]/div/div/div/a")
-    
+
+def scrape_data(driver):
+    # Handle consent popup once
+    try:
+        consent_button = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Consent')]"))
+        )
+        consent_button.click()
+        print("✅ Consent button clicked.")
+    except:
+        print("❌ No consent button found.")
+
+    match_hrefs = set()
+    prev_btn_xpath = "//button[contains(., 'Show previous')]"
+
     while True:
         try:
-            consent_button = WebDriverWait(driver, 5).until(
-                    EC.element_to_be_clickable((By.XPATH, "/html/body/div[8]/div[2]/div[2]/div[2]/button"))
-                )
-            consent_button.click()    # trigger consent button to remove modal
-            print("✅ Consent button clicked.")
-        except:
-            pass    # consent may have been handled
-            
-        try:
             previous_count = len(match_hrefs)
-            # remove the pop-up modal, cookie modal, consent button
-            WebDriverWait(driver, 15).until(
+
+            # Wait until no overlay
+            WebDriverWait(driver, 10).until(
                 EC.invisibility_of_element_located((By.CLASS_NAME, "fc-dialog-overlay"))
             )
-            load_prev_btn = WebDriverWait(driver, 15).until(
-                EC.element_to_be_clickable((By.XPATH, "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div/div[2]/div[1]/div/div/div/button"))
+
+            # Click Load Previous
+            if not safe_click(prev_btn_xpath):
+                print("⚠️ No 'Show previous' button found. Stopping.")
+                break
+            print("🔄 Clicked 'Show previous'")
+
+            # Wait until new matches appear
+            WebDriverWait(driver, 10).until(
+                lambda d: len(get_match_hrefs([2023, 2024, 2025])) > previous_count
             )
-            load_prev_btn.click()   # trigger load previous button
-            # driver.execute_script("arguments[0].click();", load_prev_btn)
-            
-            # Wait for new content to load
-            time.sleep(4)  # Or better: wait for a new match element to appear
-            # Get new hrefs
+
+            # Update match list
             new_hrefs = get_match_hrefs([2023, 2024, 2025])
-            print(f"Loaded {len(new_hrefs - match_hrefs)} matches")
+            before_count = len(match_hrefs)
             match_hrefs.update(new_hrefs)
+            print(f"📊 Collected so far: {len(match_hrefs)} matches")
+
+            if len(match_hrefs) == before_count:
+                print("⚠️ No new matches after click. Stopping.")
+                break
+
         except Exception as e:
-            print("No more 'Load Previous' button or loading stopped:", e)
+            print("❌ Error or no more button:", e)
             break
+
+    return match_hrefs
+
+
+# def scrape_data(driver):
+#     match_hrefs = set()
+
+#     def safe_click(xpath):
+#         """Wait and safely click an element via JavaScript if needed."""
+#         try:
+#             btn = WebDriverWait(driver, 10).until(
+#                 EC.element_to_be_clickable((By.XPATH, xpath))
+#             )
+#             driver.execute_script("arguments[0].click();", btn)  # JS click bypasses overlays
+#             time.sleep(2)
+#             return True
+#         except Exception:
+#             return False
+
+#     # Handle consent pop-up once
+#     try:
+#         consent_button = WebDriverWait(driver, 5).until(
+#             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Consent')]"))
+#         )
+#         consent_button.click()
+#         print("✅ Consent button clicked.")
+#     except:
+#         pass
+
+#     prev_btn_xpath = "//button[contains(text(), 'Show previous')]"
+
+#     while True:
+#         # Extract match hrefs before clicking
+#         new_hrefs = get_match_hrefs([2023, 2024, 2025])
+#         before_count = len(match_hrefs)
+#         match_hrefs.update(new_hrefs)
+#         print(f"Collected so far: {len(match_hrefs)} matches")
+
+#         # Try to click Load Previous
+#         if not safe_click(prev_btn_xpath):
+#             print("No more 'Load Previous' button. Stopping.")
+#             break
+
+#         # If no new matches were added after click, stop loop
+#         if len(match_hrefs) == before_count:
+#             print("No new matches loaded. Stopping.")
+#             break
+
+#     return match_hrefs
+
+
+def load_all_matches(driver, get_match_hrefs, years=[2023, 2024, 2025], match_hrefs=match_hrefs):
+    """
+    Clicks 'Load Previous' until no more matches are found.
     
-    # print(f"Total matches found for 2025 in france/ligue-1: {len(match_hrefs)}")
-    # for href in sorted(match_hrefs):
-    #     print(href)
+    Args:
+        driver: Selenium WebDriver instance
+        get_match_hrefs: Function returning a set of hrefs for given years
+        years: List of years (default [2023, 2024, 2025])
+        match_hrefs: Existing set of match hrefs; if None, will be initialized
+    """
+    # if match_hrefs is None:
+    #     match_hrefs = set(get_match_hrefs(years))  # start with what’s already loaded
+
+    while True:
+        # Handle consent popup (if it appears)
+        try:
+            consent_button = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Consent')]"))
+            )
+            consent_button.click()
+            print("✅ Consent button clicked.")
+        except:
+            pass
+
+        try:
+            previous_count = len(match_hrefs)
+
+            # Wait for overlays to disappear
+            WebDriverWait(driver, 10).until(
+                EC.invisibility_of_element_located((By.CLASS_NAME, "fc-dialog-overlay"))
+            )
+
+            # Find and click 'Load Previous'
+            load_prev_btn = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.XPATH, "//div[@class='block_match_list']//button"))
+            )
+            try:
+                load_prev_btn.click()
+            except:
+                driver.execute_script("arguments[0].click();", load_prev_btn)
+            print("🔄 Clicked 'Load Previous'")
+
+            # Wait for more matches
+            WebDriverWait(driver, 10).until(
+                lambda d: len(get_match_hrefs(years)) > previous_count
+            )
+
+            # Update matches
+            new_hrefs = get_match_hrefs(years)
+            added = len(new_hrefs - match_hrefs)
+            match_hrefs.update(new_hrefs)
+            print(f"📈 Loaded {added} new matches. Total: {len(match_hrefs)}")
+
+            if added == 0:
+                print("⚠️ No new matches after click. Stopping.")
+                break
+
+        except Exception as e:
+            print("❌ No more 'Load Previous' button or stopped due to error:", e)
+            break
+
+    print(f"✅ Total matches found: {len(match_hrefs)}")
+    for href in sorted(match_hrefs):
+        print(href)
+
+    return match_hrefs
+
+
 
 def load_all_previous_data(driver, timeout=10):
     """Click the 'Load Previous' button until it disappears or becomes inactive."""
@@ -167,8 +301,11 @@ def load_all_previous_data(driver, timeout=10):
     
 def extract_match_data(driver, match_hrefs):
     zero_zero_count = 0
+    early_goals_count = 0
     late_goals_count = 0
     valid_scores = {'0 - 1', '1 - 0', '1 - 1', '0 - 2', '2 - 0', '1 - 2', '2 - 1'}
+    early_goal_teams = []
+    early_goal_matches = []
     late_goal_teams = []
     late_goal_matches = []
     goal_count = 0
@@ -236,32 +373,66 @@ def extract_match_data(driver, match_hrefs):
                     
                         # Check if goal_count is valid and all goals are after 70th minute
                     if goal_count and 1 <= minute <= 90:
-                        late_goals_count += 1
-                        late_goal_teams.append(f"{home_team_elem.text.strip()} {int(home_score_elem.text.strip())} vs {int(away_score_elem.text.strip())} {away_team_elem.text.strip()}")
+                        early_goals_count += 1
+                        early_goal_teams.append(f"{home_team_elem.text.strip()} {int(home_score_elem.text.strip())} vs {int(away_score_elem.text.strip())} {away_team_elem.text.strip()}")
 
                 # all_goals = sorted(home_goals_minutes + away_goals_minutes)
 
                 # if all_goals and all(minute >= 70 for minute in all_goals):
                 #     late_goals_count += 1
                 #     late_goal_teams.append(f"{home_team_elem.text.strip()} vs {away_team_elem.text.strip()}")
-                late_goal_matches.append({
+                early_goal_matches.append({
                     "zero_zero_count": zero_zero_count,
-                    "late_goals_count": late_goals_count,
-                    "late_goal_teams": late_goal_teams,
+                    "early_goals_count": early_goals_count,
+                    "early_goal_teams": early_goal_teams,
                     "goal_count": goal_count
                 })
                 
                 df_zero = pd.DataFrame([{"0-0 Count": zero_zero_count}])
-                df_late = pd.DataFrame(late_goal_matches)
+                df_early = pd.DataFrame(early_goal_matches)
 
                 df_zero.to_csv("data/zero_zero_matches.csv", index=False)
+                df_early.to_csv("data/early_goal_matches.csv", index=False)
+                
+            if score not in valid_scores and total_goals > 3:
+                load_all_previous_data(driver)
+                
+                all_goals = home_score + away_score
+                late_goals_count += 1
+                late_goal_teams.append(f"{home_team_elem.text.strip()} {int(home_score_elem.text.strip())} vs {int(away_score_elem.text.strip())} {away_team_elem.text.strip()}")
+                
+                late_goal_matches.append({
+                    "late_goals_count": late_goals_count,
+                    "late_goal_teams": late_goal_teams,
+                    "home_score": home_score,
+                    "away_score": away_score,
+                    "all_goals": all_goals,
+                })
+                
+                df_late = pd.DataFrame(late_goal_matches)
                 df_late.to_csv("data/late_goal_matches.csv", index=False)
+                
+            complete_data = {
+                "home_team_elem": home_team_elem.text.strip(),
+                "away_team_elem": away_team_elem.text.strip(),
+                "home_score": home_score,
+                "away_score": away_score,
+                "score": score,
+                "zero_zero_count": zero_zero_count,
+                "early_goals_count": early_goals_count,
+                "late_goals_count": late_goals_count,
+                "goal_count": goal_count,
+                "early_goal_teams": early_goal_teams,
+                "late_goal_teams": late_goal_teams
+            }
+            df_complete = pd.DataFrame([complete_data])
+            df_complete.to_csv("data/complete_match_data.csv", index=False)
 
         except Exception as e:
             print(f"Error processing {href}: {e}")
             continue
         
-    return df_zero, df_late
+    return df_zero, df_early, df_late, df_complete
 
     # zero_zero_count = 0
     # late_goals_count = 0

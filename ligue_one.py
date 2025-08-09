@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from scraper import scrape_data
+from scraper import scrape_data, extract_match_data, driver, start_driver
 import os
 
 st.set_page_config(page_title="Ligue 1 Match Analyzer", layout="wide")
@@ -9,39 +9,82 @@ st.title("⚽ Ligue 1 Match Analyzer (2024/25)")
 
 # Scrape Button
 st.sidebar.header("🔄 Live Scraper")
-# chromedriver_path = st.sidebar.text_input("Enter path to chromedriver", value="/usr/bin/chromedriver")
 if st.sidebar.button("Scrape Live Data"):
-    with st.spinner("Scraping Soccerway... please wait (~1-2 mins)"):
-        df_zero, df_late = scrape_data()
-        st.success("✅ Live data updated!")
+    with st.spinner("Scraping Soccerway... please wait (~1-2 mins)"):        
+        driver = start_driver()  # Initialize the driver
+        if not driver:
+            st.error("Failed to start the web driver. Please check your setup.")
+            st.stop()
+        st.success("Web driver started successfully!")
+        st.info("Scraping data... This may take a moment.")
+        
+        # Ensure the driver is passed to the scrape_data function
+        try:
+            match_hrefs = scrape_data(driver)  # Pass driver in
+            if not match_hrefs:
+                st.error("No match data found. Please check the scraper.")
+            else:
+                if not os.path.exists("data"):
+                    os.makedirs("data", exist_ok=True)
+                
+                # Extract all match info, including 'Previous' clicks
+                df_zero, df_early, df_late, df_complete = extract_match_data(driver, match_hrefs)
+
+                # Save CSVs
+                df_zero.to_csv("~/Work/Development/Projects/football/data/zero_zero_matches.csv", index=False)
+                df_early.to_csv("~/Work/Development/Projects/football/data/early_goal_matches.csv", index=False)
+                df_late.to_csv("~/Work/Development/Projects/football/data/late_goal_matches.csv", index=False)
+                df_complete.to_csv("~/Work/Development/Projects/football/data/complete_matches.csv", index=False)
+
+                st.success("✅ Live data updated!")
+        except Exception as e:
+            st.error(f"Error extracting match data: {e}")
+        finally:
+            driver.quit()
 
 # Load data
 try:
-    df_zero = pd.read_csv("data/zero_zero_matches.csv")
-    df_late = pd.read_csv("data/late_goal_matches.csv")
-    df_late['Date'] = pd.to_datetime(df_late['Date'], errors='coerce')
+    df_zero = pd.read_csv("./data/zero_zero_matches.csv", sep=",")
+    df_early = pd.read_csv("./data/early_goal_matches.csv", sep=",")
+    df_late = pd.read_csv("./data/late_goal_matches.csv", sep=",")
+    df_complete = pd.read_csv("./data/complete_matches.csv", sep=",")
+    # df_late['Date'] = pd.to_datetime(df_late['Date'], errors='coerce')
+    # df_complete['Date'] = pd.to_datetime(df_complete['Date'], errors='coerce')
 except Exception as e:
-    st.error("Error loading CSV files. Please scrape first.")
+    st.error("Error loading CSV files. Please extract first.")
     st.stop()
 
 # Section 1 – 0-0 Matches
 st.subheader("🥱 0-0 Matches")
 st.metric(label="Total 0-0 Matches", value=int(df_zero.iloc[0, 0]))
 
-# Section 2 – Late Goals
-st.subheader("⏱ Matches with 1–3 Goals & First Goal ≥ 70'")
-team_filter = st.text_input("Filter by Team Name").lower().strip()
-min_goal_time = st.slider("Minimum First Goal Time", 70, 90, 70)
+# Section 2 – Early Goals
+st.subheader("⚡ Matches with 1–3 Goals & First Goal < 70'")
+team_filter_early = st.text_input("Filter by Team Name (Early Goals)").lower().strip()
+min_goal_time_early = st.slider("Minimum First Goal Time", 0, 70, 0)
 
-filtered = df_late[
-    (df_late["First Goal Minute"] >= min_goal_time) &
-    (
-        df_late["Home Team"].str.lower().str.contains(team_filter) |
-        df_late["Away Team"].str.lower().str.contains(team_filter)
+# Section 3 – Late Goals
+st.subheader("⏱ Matches with 1–3 Goals & First Goal ≥ 70'")
+team_filter_late = st.text_input("Filter by Team Name").lower().strip()
+min_goal_time_late = st.slider("Minimum First Goal Time", 70, 90, 70)
+
+filtered_early = df_early[
+    (df_early["First Goal Minute"] <= min_goal_time_early) &
+    (   df_early["Home Team"].str.lower().str.contains(team_filter_early) |
+        df_early["Away Team"].str.lower().str.contains(team_filter_early)
     )
 ]
 
-st.dataframe(filtered.sort_values(by="Date", ascending=False), use_container_width=True)
+filtered_late = df_late[
+    (df_late["First Goal Minute"] >= min_goal_time_late) &
+    (
+        df_late["Home Team"].str.lower().str.contains(team_filter_late) |
+        df_late["Away Team"].str.lower().str.contains(team_filter_late)
+    )
+]
+
+st.dataframe(filtered_early.sort_values(by="Date", ascending=False), use_container_width=True)
+st.dataframe(filtered_late.sort_values(by="Date", ascending=False), use_container_width=True)
 
 # Charts
 st.subheader("📊 Goal Minute Distribution")
