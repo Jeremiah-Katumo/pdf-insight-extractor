@@ -15,6 +15,7 @@ import pandas as pd
 
 url = "https://ca.soccerway.com/national/france/ligue-1/20242025/regular-season/r81802/matches/"
 
+
 def start_driver():
     chrome_options = Options()
     chrome_options.add_argument("--headless")  # Run in background
@@ -29,6 +30,7 @@ def start_driver():
     driver = webdriver.Chrome(options=chrome_options)
 
     return driver
+
 
 driver = start_driver()
 
@@ -67,6 +69,7 @@ def extract_minute(text):
             except:
                 return None
     return None
+
 
 def get_goal_minutes(goal_events_div_xpath):  # arg: goal_events_div_xpath
     try:
@@ -209,7 +212,7 @@ def scrape_data(driver):
 #     return match_hrefs
 
 
-def load_all_matches(driver, get_match_hrefs, years=[2023, 2024, 2025], match_hrefs=match_hrefs):
+def load_all_matches_hrefs(driver, get_match_hrefs, years=[2023, 2024, 2025], match_hrefs=None):
     """
     Clicks 'Load Previous' until no more matches are found.
     
@@ -219,8 +222,8 @@ def load_all_matches(driver, get_match_hrefs, years=[2023, 2024, 2025], match_hr
         years: List of years (default [2023, 2024, 2025])
         match_hrefs: Existing set of match hrefs; if None, will be initialized
     """
-    # if match_hrefs is None:
-    #     match_hrefs = set(get_match_hrefs(years))  # start with what’s already loaded
+    if match_hrefs is None:
+        match_hrefs = set(get_match_hrefs(years))  # start with what’s already loaded
 
     while True:
         # Handle consent popup (if it appears)

@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from scraper import scrape_data, extract_match_data, driver, start_driver
+from scraper import scrape_data, extract_match_data, driver, start_driver, load_all_matches_hrefs, get_match_hrefs
 import os
 
 st.set_page_config(page_title="Ligue 1 Match Analyzer", layout="wide")
@@ -20,7 +20,8 @@ if st.sidebar.button("Scrape Live Data"):
         
         # Ensure the driver is passed to the scrape_data function
         try:
-            match_hrefs = scrape_data(driver)  # Pass driver in
+            match_hrefs = load_all_matches_hrefs(driver, get_match_hrefs)  # Pass driver in
+            print(f"Found {len(match_hrefs)} matches to scrape.")
             if not match_hrefs:
                 st.error("No match data found. Please check the scraper.")
             else:
@@ -28,7 +29,7 @@ if st.sidebar.button("Scrape Live Data"):
                     os.makedirs("data", exist_ok=True)
                 
                 # Extract all match info, including 'Previous' clicks
-                df_zero, df_early, df_late, df_complete = extract_match_data(driver, match_hrefs)
+                df_zero, df_early, df_late, df_complete = extract_match_data(driver)
 
                 # Save CSVs
                 df_zero.to_csv("~/Work/Development/Projects/football/data/zero_zero_matches.csv", index=False)
