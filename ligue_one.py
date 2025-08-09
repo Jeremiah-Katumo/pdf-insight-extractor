@@ -40,19 +40,19 @@ if st.sidebar.button("Scrape Live Data"):
             st.success("✅ Live data updated!")
         except Exception as e:
             st.error(f"Error extracting match data: {e}")
-        finally:
-            driver.quit()
+        # finally:
+        #     driver.quit()
 
 # Load data
 try:
-    df_zero = pd.read_csv("./data/zero_zero_matches.csv", sep=",")
-    df_early = pd.read_csv("./data/early_goal_matches.csv", sep=",")
-    df_late = pd.read_csv("./data/late_goal_matches.csv", sep=",")
-    df_complete = pd.read_csv("./data/complete_matches.csv", sep=",")
+    df_zero = df_zero
+    df_early = df_early
+    df_late = df_late
+    df_complete = df_complete
     # df_late['Date'] = pd.to_datetime(df_late['Date'], errors='coerce')
     # df_complete['Date'] = pd.to_datetime(df_complete['Date'], errors='coerce')
 except Exception as e:
-    st.error("Error loading CSV files. Please extract first.")
+    st.error("Error loading CSV files.")
     st.stop()
 
 # Section 1 – 0-0 Matches
