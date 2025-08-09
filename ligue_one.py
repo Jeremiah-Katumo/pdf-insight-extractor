@@ -20,24 +20,24 @@ if st.sidebar.button("Scrape Live Data"):
         
         # Ensure the driver is passed to the scrape_data function
         try:
-            match_hrefs = load_all_matches_hrefs(driver, get_match_hrefs)  # Pass driver in
-            print(f"Found {len(match_hrefs)} matches to scrape.")
-            if not match_hrefs:
-                st.error("No match data found. Please check the scraper.")
-            else:
-                if not os.path.exists("data"):
-                    os.makedirs("data", exist_ok=True)
-                
-                # Extract all match info, including 'Previous' clicks
-                df_zero, df_early, df_late, df_complete = extract_match_data(driver)
+            # match_hrefs = load_all_matches_hrefs(driver, get_match_hrefs)  # Pass driver in
+            # print(f"Found {len(match_hrefs)} matches to scrape.")
+            # if not match_hrefs:
+            #     st.error("No match data found. Please check the scraper.")
+            # else:
+            if not os.path.exists("data"):
+                os.makedirs("data", exist_ok=True)
+            
+            # Extract all match info, including 'Previous' clicks
+            df_zero, df_early, df_late, df_complete = extract_match_data(driver)
 
-                # Save CSVs
-                df_zero.to_csv("~/Work/Development/Projects/football/data/zero_zero_matches.csv", index=False)
-                df_early.to_csv("~/Work/Development/Projects/football/data/early_goal_matches.csv", index=False)
-                df_late.to_csv("~/Work/Development/Projects/football/data/late_goal_matches.csv", index=False)
-                df_complete.to_csv("~/Work/Development/Projects/football/data/complete_matches.csv", index=False)
+            # Save CSVs
+            df_zero.to_csv("~/Work/Development/Projects/football/data/zero_zero_matches.csv", index=False)
+            df_early.to_csv("~/Work/Development/Projects/football/data/early_goal_matches.csv", index=False)
+            df_late.to_csv("~/Work/Development/Projects/football/data/late_goal_matches.csv", index=False)
+            df_complete.to_csv("~/Work/Development/Projects/football/data/complete_matches.csv", index=False)
 
-                st.success("✅ Live data updated!")
+            st.success("✅ Live data updated!")
         except Exception as e:
             st.error(f"Error extracting match data: {e}")
         finally:
