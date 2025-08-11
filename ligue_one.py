@@ -33,12 +33,6 @@ if st.sidebar.button("Scrape Live Data"):
             df_complete["first_goal_minute"] = pd.to_numeric(df_complete["first_goal_minute"], errors='coerce').fillna(0).astype(int)
             df_complete["last_goal_minute"] = pd.to_numeric(df_complete["last_goal_minute"], errors='coerce').fillna(0).astype(int)
             
-            # Save CSVs
-            df_zero.to_csv("~/Work/Development/Projects/football/data/zero_zero_matches.csv", index=False)
-            df_early.to_csv("~/Work/Development/Projects/football/data/early_goal_matches.csv", index=False)
-            df_late.to_csv("~/Work/Development/Projects/football/data/late_goal_matches.csv", index=False)
-            df_complete.to_csv("~/Work/Development/Projects/football/data/complete_matches.csv", index=False)
-
             st.success("✅ Live data updated!")
         except Exception as e:
             st.error(f"Error extracting match data: {e}")
