@@ -75,25 +75,28 @@ min_goal_time_early = st.slider("Minimum First Goal Time", 0, 70, 0)
 # Section 3 – Late Goals
 st.subheader("⏱ Matches with 1–3 Goals & First Goal ≥ 70'")
 team_filter_late = st.text_input("Filter by Team Name").lower().strip()
-min_goal_time_late = st.slider("Minimum First Goal Time", 70, 90, 70)
+min_goal_time_late = st.slider("Maximum First Goal Time", 70, 90, 70)
+
+st.dataframe(df_complete, use_container_width=True)
 
 filtered_early = df_early[
-    (df_early["First Goal Minute"] <= min_goal_time_early) &
-    (   df_early["Home Team"].str.lower().str.contains(team_filter_early) |
-        df_early["Away Team"].str.lower().str.contains(team_filter_early)
+    (df_complete["first_goal_minute"] <= min_goal_time_early) &
+    (   
+        df_complete["home_team"].str.lower().str.contains(team_filter_early) |
+        df_complete["away_team"].str.lower().str.contains(team_filter_early)
     )
 ]
 
 filtered_late = df_late[
-    (df_late["First Goal Minute"] >= min_goal_time_late) &
+    (df_complete["first_goal_minute"] >= min_goal_time_late) &
     (
-        df_late["Home Team"].str.lower().str.contains(team_filter_late) |
-        df_late["Away Team"].str.lower().str.contains(team_filter_late)
+        df_complete["home_team"].str.lower().str.contains(team_filter_late) |
+        df_complete["away_team"].str.lower().str.contains(team_filter_late)
     )
 ]
 
-st.dataframe(filtered_early.sort_values(by="Date", ascending=False), use_container_width=True)
-st.dataframe(filtered_late.sort_values(by="Date", ascending=False), use_container_width=True)
+st.dataframe(filtered_early, use_container_width=True)
+st.dataframe(filtered_late, use_container_width=True)
 
 # Charts
 st.subheader("📊 Goal Minute Distribution")

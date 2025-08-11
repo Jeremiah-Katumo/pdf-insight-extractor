@@ -351,7 +351,6 @@ def extract_match_data(driver):
             
             if score in valid_scores and 1 <= total_goals <= 3:
                 load_all_previous_data(driver)
-
                 xpaths = [
                     "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[2]/div[2]/span/span",
                     "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[3]/div[2]/span/span",
@@ -363,12 +362,15 @@ def extract_match_data(driver):
                 minutes_list = []
                 for xpath in xpaths:
                     try:
-                        scored_minute = driver.find_element(By.XPATH, xpath).text.strip()
-                        if not scored_minute:
-                            break
-                        minutes_list.append(scored_minute)
-                    except:
-                        break
+                        scored_minute = driver.find_element(By.XPATH, xpath)
+                        scored_minute_text = scored_minute.text.strip()
+                        # print([scored_minute_text])
+                        if not scored_minute_text:
+                            break  # Stop if no more scored minutes
+                        minutes_list.append(scored_minute_text)
+                        print(minutes_list)
+                    except Exception as e:
+                        print(f"Could not find element at {xpath} - {e}")
                         
                 parsed_minutes = [parse_minute(minute) for minute in minutes_list]
                 
@@ -413,12 +415,17 @@ def extract_match_data(driver):
                 "home_score": home_score,
                 "away_score": away_score,
                 "score": score,
+                "total_goals": total_goals,
                 "zero_zero_count": zero_zero_count,
                 "early_goals_count": early_goals_count,
                 "late_goals_count": late_goals_count,
                 "goal_count": goal_count,
                 "early_goal_teams": early_goal_teams,
-                "late_goal_teams": late_goal_teams
+                "late_goal_teams": late_goal_teams,
+                "minutes_list": parsed_minutes,
+                "first_goal_minute": min(parsed_minutes) if parsed_minutes else None,
+                "last_goal_minute": max(parsed_minutes) if parsed_minutes else None,
+                "match_link": href
             }
             
             df_complete = pd.concat([df_complete, pd.DataFrame([complete_data])], ignore_index=True)
