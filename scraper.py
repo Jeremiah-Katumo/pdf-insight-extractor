@@ -302,7 +302,11 @@ def load_all_previous_data(driver, timeout=10):
             time.sleep(1)
             
     
-def extract_match_data(driver, match_hrefs):
+def extract_match_data(driver):
+    # === Step 1: Get all match links ===
+    match_hrefs = load_all_matches_hrefs(driver, get_match_hrefs)
+    print(f"Found {len(match_hrefs)} matches to scrape.")
+
     zero_zero_count = 0
     early_goals_count = 0
     late_goals_count = 0
@@ -312,6 +316,11 @@ def extract_match_data(driver, match_hrefs):
     late_goal_teams = []
     late_goal_matches = []
     goal_count = 0
+
+    df_zero = pd.DataFrame()
+    df_early = pd.DataFrame()
+    df_late = pd.DataFrame()
+    df_complete = pd.DataFrame()
 
     for href in match_hrefs:
         driver.get(href)
@@ -323,7 +332,7 @@ def extract_match_data(driver, match_hrefs):
             consent_button.click()
             time.sleep(1)
         except:
-            pass  # Consent may have already been handled
+            pass
 
         try:
             home_score_elem = driver.find_element(By.XPATH, "/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[3]/div/div/div/div[1]/div")
@@ -338,13 +347,10 @@ def extract_match_data(driver, match_hrefs):
 
             if score == "0 - 0":
                 zero_zero_count += 1
-                print(zero_zero_count)
                 continue
             
             if score in valid_scores and 1 <= total_goals <= 3:
                 load_all_previous_data(driver)
-                # home_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[1]")
-                # away_goals_minutes = get_goal_minutes("/html/body/div[3]/div/div/div[1]/div/div[1]/div/div[5]/div[2]")
                 xpaths = [
                     "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[2]/div[2]/span/span",
                     "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[3]/div[2]/span/span",
@@ -353,7 +359,6 @@ def extract_match_data(driver, match_hrefs):
                     "/html/body/div[3]/div/div/div[1]/div/div[3]/div[2]/div/div/div/div[1]/div[2]/div/div[2]/div[1]/div[6]/div[2]/span/span"
                 ]
 
-                # === Extract and print scored minutes ===
                 minutes_list = []
                 for xpath in xpaths:
                     try:
@@ -367,23 +372,15 @@ def extract_match_data(driver, match_hrefs):
                     except Exception as e:
                         print(f"Could not find element at {xpath} - {e}")
                         
-                parsed_minutes = [parse_minute(minute) for minute in minutes_list]  # e.g., [20, 43, 53]
-                # print(parsed_minutes)  # e.g., [20, 43, 53]
+                parsed_minutes = [parse_minute(minute) for minute in minutes_list]
                 
                 for minute in parsed_minutes:
                     if minute <= 70:
                         goal_count += 1
-                    
-                        # Check if goal_count is valid and all goals are after 70th minute
                     if goal_count and 1 <= minute <= 90:
                         early_goals_count += 1
-                        early_goal_teams.append(f"{home_team_elem.text.strip()} {int(home_score_elem.text.strip())} vs {int(away_score_elem.text.strip())} {away_team_elem.text.strip()}")
+                        early_goal_teams.append(f"{home_team_elem.text.strip()} {home_score} vs {away_score} {away_team_elem.text.strip()}")
 
-                # all_goals = sorted(home_goals_minutes + away_goals_minutes)
-
-                # if all_goals and all(minute >= 70 for minute in all_goals):
-                #     late_goals_count += 1
-                #     late_goal_teams.append(f"{home_team_elem.text.strip()} vs {away_team_elem.text.strip()}")
                 early_goal_matches.append({
                     "zero_zero_count": zero_zero_count,
                     "early_goals_count": early_goals_count,
@@ -393,42 +390,45 @@ def extract_match_data(driver, match_hrefs):
                 
                 df_zero = pd.DataFrame([{"0-0 Count": zero_zero_count}])
                 df_early = pd.DataFrame(early_goal_matches)
-
                 df_zero.to_csv("data/zero_zero_matches.csv", index=False)
                 df_early.to_csv("data/early_goal_matches.csv", index=False)
                 
             if score not in valid_scores and total_goals > 3:
                 load_all_previous_data(driver)
-                
-                all_goals = home_score + away_score
                 late_goals_count += 1
-                late_goal_teams.append(f"{home_team_elem.text.strip()} {int(home_score_elem.text.strip())} vs {int(away_score_elem.text.strip())} {away_team_elem.text.strip()}")
+                late_goal_teams.append(f"{home_team_elem.text.strip()} {home_score} vs {away_score} {away_team_elem.text.strip()}")
                 
                 late_goal_matches.append({
                     "late_goals_count": late_goals_count,
                     "late_goal_teams": late_goal_teams,
                     "home_score": home_score,
                     "away_score": away_score,
-                    "all_goals": all_goals,
+                    "all_goals": total_goals,
                 })
                 
                 df_late = pd.DataFrame(late_goal_matches)
                 df_late.to_csv("data/late_goal_matches.csv", index=False)
                 
             complete_data = {
-                "home_team_elem": home_team_elem.text.strip(),
-                "away_team_elem": away_team_elem.text.strip(),
+                "home_team": home_team_elem.text.strip(),
+                "away_team": away_team_elem.text.strip(),
                 "home_score": home_score,
                 "away_score": away_score,
                 "score": score,
+                "total_goals": total_goals,
                 "zero_zero_count": zero_zero_count,
                 "early_goals_count": early_goals_count,
                 "late_goals_count": late_goals_count,
                 "goal_count": goal_count,
                 "early_goal_teams": early_goal_teams,
-                "late_goal_teams": late_goal_teams
+                "late_goal_teams": late_goal_teams,
+                "minutes_list": parsed_minutes,
+                "first_goal_minute": min(parsed_minutes) if parsed_minutes else None,
+                "last_goal_minute": max(parsed_minutes) if parsed_minutes else None,
+                "match_link": href
             }
-            df_complete = pd.DataFrame([complete_data])
+            
+            df_complete = pd.concat([df_complete, pd.DataFrame([complete_data])], ignore_index=True)
             df_complete.to_csv("data/complete_match_data.csv", index=False)
 
         except Exception as e:
@@ -436,6 +436,7 @@ def extract_match_data(driver, match_hrefs):
             continue
         
     return df_zero, df_early, df_late, df_complete
+
 
     # zero_zero_count = 0
     # late_goals_count = 0

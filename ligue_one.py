@@ -20,44 +20,48 @@ if st.sidebar.button("Scrape Live Data"):
         
         # Ensure the driver is passed to the scrape_data function
         try:
-            match_hrefs = load_all_matches_hrefs(driver, get_match_hrefs)  # Pass driver in
-            print(f"Found {len(match_hrefs)} matches to scrape.")
-            if not match_hrefs:
-                st.error("No match data found. Please check the scraper.")
-            else:
-                if not os.path.exists("data"):
-                    os.makedirs("data", exist_ok=True)
-                
-                # Extract all match info, including 'Previous' clicks
-                df_zero, df_early, df_late, df_complete = extract_match_data(driver)
-
-                # Save CSVs
-                df_zero.to_csv("~/Work/Development/Projects/football/data/zero_zero_matches.csv", index=False)
-                df_early.to_csv("~/Work/Development/Projects/football/data/early_goal_matches.csv", index=False)
-                df_late.to_csv("~/Work/Development/Projects/football/data/late_goal_matches.csv", index=False)
-                df_complete.to_csv("~/Work/Development/Projects/football/data/complete_matches.csv", index=False)
-
-                st.success("✅ Live data updated!")
+            # match_hrefs = load_all_matches_hrefs(driver, get_match_hrefs)  # Pass driver in
+            # print(f"Found {len(match_hrefs)} matches to scrape.")
+            # if not match_hrefs:
+            #     st.error("No match data found. Please check the scraper.")
+            # else:
+            if not os.path.exists("data"):
+                os.makedirs("data", exist_ok=True)
+            
+            # Extract all match info, including 'Previous' clicks
+            df_zero, df_early, df_late, df_complete = extract_match_data(driver)
+            df_complete["first_goal_minute"] = pd.to_numeric(df_complete["first_goal_minute"], errors='coerce').fillna(0).astype(int)
+            df_complete["last_goal_minute"] = pd.to_numeric(df_complete["last_goal_minute"], errors='coerce').fillna(0).astype(int)
+            
+            st.success("✅ Live data updated!")
         except Exception as e:
             st.error(f"Error extracting match data: {e}")
-        finally:
-            driver.quit()
+        # finally:
+        #     driver.quit()
 
 # Load data
 try:
-    df_zero = pd.read_csv("./data/zero_zero_matches.csv", sep=",")
-    df_early = pd.read_csv("./data/early_goal_matches.csv", sep=",")
-    df_late = pd.read_csv("./data/late_goal_matches.csv", sep=",")
-    df_complete = pd.read_csv("./data/complete_matches.csv", sep=",")
+    df_zero = df_zero
+    df_early = df_early
+    df_late = df_late
+    df_complete = df_complete
     # df_late['Date'] = pd.to_datetime(df_late['Date'], errors='coerce')
     # df_complete['Date'] = pd.to_datetime(df_complete['Date'], errors='coerce')
 except Exception as e:
-    st.error("Error loading CSV files. Please extract first.")
+    st.error("Error loading CSV files.")
     st.stop()
 
 # Section 1 – 0-0 Matches
 st.subheader("🥱 0-0 Matches")
-st.metric(label="Total 0-0 Matches", value=int(df_zero.iloc[0, 0]))
+if df_zero.empty:
+    st.warning("No 0-0 matches found.")
+else:
+    st.metric(label="Total Matches", value=len(df_zero))
+    st.metric(label="Total 0-0 Matches", value=int(df_zero["0_0_count"].iloc[0]))
+    st.dataframe(df_zero.sort_values(by="Date", ascending=False), use_container_width=True)
+    st.markdown("### Match Details")
+    st.markdown("This section shows all matches that ended in a 0-0 draw.")
+# st.metric(label="Total 0-0 Matches", value=int(df_zero["zero_zero_count"].iloc[0]))
 
 # Section 2 – Early Goals
 st.subheader("⚡ Matches with 1–3 Goals & First Goal < 70'")
@@ -67,25 +71,28 @@ min_goal_time_early = st.slider("Minimum First Goal Time", 0, 70, 0)
 # Section 3 – Late Goals
 st.subheader("⏱ Matches with 1–3 Goals & First Goal ≥ 70'")
 team_filter_late = st.text_input("Filter by Team Name").lower().strip()
-min_goal_time_late = st.slider("Minimum First Goal Time", 70, 90, 70)
+min_goal_time_late = st.slider("Maximum First Goal Time", 70, 90, 70)
+
+st.dataframe(df_complete, use_container_width=True)
 
 filtered_early = df_early[
-    (df_early["First Goal Minute"] <= min_goal_time_early) &
-    (   df_early["Home Team"].str.lower().str.contains(team_filter_early) |
-        df_early["Away Team"].str.lower().str.contains(team_filter_early)
+    (df_complete["first_goal_minute"] <= min_goal_time_early) &
+    (   
+        df_complete["home_team"].str.lower().str.contains(team_filter_early) |
+        df_complete["away_team"].str.lower().str.contains(team_filter_early)
     )
 ]
 
 filtered_late = df_late[
-    (df_late["First Goal Minute"] >= min_goal_time_late) &
+    (df_complete["first_goal_minute"] >= min_goal_time_late) &
     (
-        df_late["Home Team"].str.lower().str.contains(team_filter_late) |
-        df_late["Away Team"].str.lower().str.contains(team_filter_late)
+        df_complete["home_team"].str.lower().str.contains(team_filter_late) |
+        df_complete["away_team"].str.lower().str.contains(team_filter_late)
     )
 ]
 
-st.dataframe(filtered_early.sort_values(by="Date", ascending=False), use_container_width=True)
-st.dataframe(filtered_late.sort_values(by="Date", ascending=False), use_container_width=True)
+st.dataframe(filtered_early, use_container_width=True)
+st.dataframe(filtered_late, use_container_width=True)
 
 # Charts
 st.subheader("📊 Goal Minute Distribution")
