@@ -30,7 +30,9 @@ if st.sidebar.button("Scrape Live Data"):
             
             # Extract all match info, including 'Previous' clicks
             df_zero, df_early, df_late, df_complete = extract_match_data(driver)
-
+            df_complete["first_goal_minute"] = pd.to_numeric(df_complete["first_goal_minute"], errors='coerce').fillna(0).astype(int)
+            df_complete["last_goal_minute"] = pd.to_numeric(df_complete["last_goal_minute"], errors='coerce').fillna(0).astype(int)
+            
             # Save CSVs
             df_zero.to_csv("~/Work/Development/Projects/football/data/zero_zero_matches.csv", index=False)
             df_early.to_csv("~/Work/Development/Projects/football/data/early_goal_matches.csv", index=False)
