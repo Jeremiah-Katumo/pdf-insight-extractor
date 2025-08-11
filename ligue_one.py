@@ -20,11 +20,6 @@ if st.sidebar.button("Scrape Live Data"):
         
         # Ensure the driver is passed to the scrape_data function
         try:
-            # match_hrefs = load_all_matches_hrefs(driver, get_match_hrefs)  # Pass driver in
-            # print(f"Found {len(match_hrefs)} matches to scrape.")
-            # if not match_hrefs:
-            #     st.error("No match data found. Please check the scraper.")
-            # else:
             if not os.path.exists("data"):
                 os.makedirs("data", exist_ok=True)
             
