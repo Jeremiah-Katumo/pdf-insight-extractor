@@ -70,6 +70,7 @@ min_goal_time_late = st.slider("Maximum First Goal Time", 70, 90, 70)
 
 st.dataframe(df_complete, use_container_width=True)
 
+# Filter DataFrames
 filtered_early = df_early[
     (df_complete["first_goal_minute"] <= min_goal_time_early) &
     (   
