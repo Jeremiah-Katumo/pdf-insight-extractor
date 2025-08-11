@@ -69,6 +69,7 @@ st.subheader("⏱ Matches with 1–3 Goals & First Goal ≥ 70'")
 team_filter_late = st.text_input("Filter by Team Name").lower().strip()
 min_goal_time_late = st.slider("Minimum First Goal Time", 70, 90, 70)
 
+# Filter DataFrames
 filtered_early = df_early[
     (df_early["First Goal Minute"] <= min_goal_time_early) &
     (   df_early["Home Team"].str.lower().str.contains(team_filter_early) |
